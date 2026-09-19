@@ -208,6 +208,18 @@ function cn2num(str){
   for (const k in map) s = s.split(k).join(map[k]);
   return s;
 }
+/* 数字转汉字（设备台数用汉字：1→一、2→二…… 超过 99 或非整数则原样返回） */
+function num2cn(n){
+  const s = String(n == null ? '' : n).trim();
+  if (!/^\d+$/.test(s)) return s;
+  const v = parseInt(s, 10);
+  if (v > 99) return s;
+  const d = ['零','一','二','三','四','五','六','七','八','九'];
+  if (v < 10) return d[v];
+  if (v === 10) return '十';
+  const t = Math.floor(v / 10), o = v % 10;
+  return (t === 1 ? '' : d[t]) + '十' + (o ? d[o] : '');
+}
 function workConf(name){
   return workList.find(w => w.name === name) || {autoFillNum:false, enableNum:false};
 }
@@ -501,15 +513,15 @@ function refreshResult(){
 
     const devStrList = [];
     if (devRaw){
-      if (devCountRaw) devStrList.push(devRaw + devCountRaw + '台');
+      if (devCountRaw) devStrList.push(devRaw + num2cn(devCountRaw) + '台');
       else if (devRaw === "扒渣机") devStrList.push("扒渣机一台");
-      else if (devRaw === "四不像") devStrList.push("四不像3台");
+      else if (devRaw === "四不像") devStrList.push("四不像三台");
       else devStrList.push(devRaw);
     }
     if (dev2Raw){
-      if (dev2CountRaw) devStrList.push(dev2Raw + dev2CountRaw + '台');
+      if (dev2CountRaw) devStrList.push(dev2Raw + num2cn(dev2CountRaw) + '台');
       else if (dev2Raw === "扒渣机") devStrList.push("扒渣机一台");
-      else if (dev2Raw === "四不像") devStrList.push("四不像3台");
+      else if (dev2Raw === "四不像") devStrList.push("四不像三台");
       else devStrList.push(dev2Raw);
     }
     const devStr = devStrList.join('、');
@@ -760,7 +772,7 @@ function onWorkChange(sel){
   if (workVal === "出渣"){
     const placeVal = $('.place', card).value;
     if (autoFillPlace.indexOf(placeVal) !== -1){
-      /* 廊道三条支洞：固定【扒渣机一台、四不像3台】，不启用第二设备 */
+      /* 廊道三条支洞：固定【扒渣机一台、四不像三台】，不启用第二设备 */
       s1.sel.value = "扒渣机";
       s2.sel.value = "四不像";
       setShown(dev2Row, false);
