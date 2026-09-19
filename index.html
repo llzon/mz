@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#F2F5FA">
+<meta name="format-detection" content="telephone=no">
+<title>工地工序记录表单</title>
+<!--
+  工地工序记录表单 · 移动优化版 V1（2026-09-19 改版）
+  - 改版方式：局部重构（保留全部业务规则与数据清单，重构布局 / 视觉 / 交互）
+  - 设计方向：工业实用风；白色标题栏与白色按钮 + 工程蓝强调色 #1D4ED8；冷灰中性底
+  - 移动适配：触控目标不小于 44px；输入字号 16px（防 iOS 自动缩放）；单列自适应网格
+  - 字体说明：中文系统字体栈（PingFang SC / HarmonyOS Sans / MiSans 等）。单文件离线使用，不引入远程字体
+  - 图标说明：内联 SVG 线性图标（约 1.7px stroke / currentColor），不依赖图标库或外部资源
+  - 新功能：底部文本自由编辑；删除某条中的设备或工序后，卡片对应项自动转为【其他】并保留修改后的文字，其余内容不丢失
+-->
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html{-webkit-text-size-adjust:100%}
+  :root{
+    --bg:#F2F5FA; --surface:#FDFEFF; --surface2:#F7F9FC;
+    --ink:#152238; --ink2:#48576F; --muted:#68758E;
+    --line:#E1E7F0; --line2:#C8D2E2;
+    --primary:#1D4ED8; --primary-d:#1741B6; --primary-soft:#E9F0FE;
+    --accent:#C2410C; --accent-d:#9A340A;
+    --danger:#B42318; --danger-bg:#FDF3F2; --danger-line:#EFC7C2;
+    --warn-text:#8A5200; --warn-bg:#FFF7E8; --warn-card:#FFFBF3; --warn-line:#EBD9B6;
+    --focus:rgba(29,78,216,.22);
+    --font:"PingFang SC","HarmonyOS Sans SC","MiSans","HONOR Sans","Source Han Sans SC","Noto Sans CJK SC","Microsoft YaHei UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    --r-lg:18px; --r-md:14px; --r-sm:11px;
+    --shadow:0 1px 2px rgba(21,34,56,.04),0 4px 14px rgba(21,34,56,.06);
+  }
+  body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:780px;margin:0 auto;padding:14px 14px calc(76px + env(safe-area-inset-bottom))}
+  @media (min-width:720px){.wrap{padding:26px 22px 72px}}
+
+  /* ===== 顶部（白色标题栏） ===== */
+  .appbar{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:15px 18px;color:var(--ink);display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:var(--shadow)}
+  .appbar h1{font-size:19px;font-weight:700;letter-spacing:.01em}
+  .count{background:var(--primary-soft);border:1px solid #C8D9F7;color:var(--primary-d);border-radius:999px;padding:5px 11px;font-size:12.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+  /* ===== 卡片 ===== */
+  #listWrap{display:grid;gap:12px;margin-top:14px}
+  .item-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:13px 14px;box-shadow:var(--shadow)}
+  .item-card[data-locked="1"]{background:var(--warn-card);border-color:var(--warn-line)}
+  .item-card[data-detached="1"]{border-style:dashed;border-color:#C9D3E0;background:#FAFBFD}
+  .item-card[data-detached="1"] .grid{opacity:.85}
+  .card-top{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:12px}
+  .card-title{display:flex;align-items:baseline;gap:6px}
+  .card-label{font-size:13px;color:var(--muted)}
+  .card-no{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--primary)}
+  .card-tags{display:flex;gap:6px}
+  .tag{display:none;align-items:center;border-radius:8px;padding:2.5px 8px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .tag-parked{background:#EEF1F7;color:#4C5A72;border:1px dashed #C2CDDD}
+  .tag-locked{background:var(--warn-bg);color:var(--warn-text);border:1px solid var(--warn-line)}
+  [data-detached="1"] .tag-parked{display:inline-flex}
+  [data-locked="1"] .tag-locked{display:inline-flex}
+  .card-btns{display:flex;gap:8px;margin-left:auto}
+
+  /* ===== 字段 ===== */
+  .grid{display:grid;grid-template-columns:1fr;gap:12px}
+  @media (min-width:620px){.grid{grid-template-columns:1fr 1fr}}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .field.wide{grid-column:1/-1}
+  .stack{display:flex;flex-direction:column;gap:8px}
+  .f-label{font-size:13px;font-weight:600;color:var(--ink2)}
+  .dev-grid{display:grid;grid-template-columns:minmax(0,1fr) 88px;gap:8px}
+  .dev2-row{margin-top:0}
+
+  /* ===== 控件 ===== */
+  input[type="text"],select,textarea{
+    width:100%;min-height:46px;padding:10px 12px;border:1.5px solid var(--line2);border-radius:var(--r-sm);
+    background:var(--surface);color:var(--ink);font-size:16px;font-family:inherit;line-height:1.4;
+    transition:border-color .15s ease,box-shadow .15s ease;appearance:none;-webkit-appearance:none;
+  }
+  select{
+    padding-right:38px;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7A96' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center;
+  }
+  input[type="text"]:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3.5px var(--focus);outline:none}
+  input:disabled,select:disabled{background:var(--surface2);color:#7E8BA1;border-color:var(--line);cursor:not-allowed}
+  input::placeholder,textarea::placeholder{color:#6B7992}
+  textarea{min-height:210px;padding:13px 14px;line-height:1.7;resize:vertical}
+  .hide{display:none!important}
+
+  /* ===== 按钮 ===== */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 18px;border:none;border-radius:var(--r-md);font-size:16px;font-weight:600;font-family:inherit;cursor:pointer;transition:background .15s ease,transform .06s ease,box-shadow .15s ease;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  .btn:active{transform:translateY(1px) scale(.995)}
+  .btn:focus-visible{box-shadow:0 0 0 3.5px var(--focus);outline:none}
+  .btn-add{width:100%;margin-top:14px;background:var(--surface);color:var(--ink);border:1.5px solid var(--line2);box-shadow:var(--shadow)}
+  .btn-add:hover{background:var(--surface2)}
+  .btn-copy{width:100%;margin-top:10px;background:var(--surface);color:var(--ink);border:1.5px solid var(--line2);box-shadow:var(--shadow)}
+  .btn-copy:hover{background:var(--surface2)}
+  .btn-copy.ok{background:#0F7B54;color:#fff}
+  .icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 12px;background:var(--surface);border:1.5px solid var(--line2);border-radius:var(--r-sm);color:var(--ink2);font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;transition:background .15s ease,border-color .15s ease,color .15s ease;touch-action:manipulation}
+  .icon-btn:hover{background:var(--surface2);color:var(--ink)}
+  .icon-btn:focus-visible{box-shadow:0 0 0 3.5px var(--focus);outline:none}
+  .icon-btn.danger{color:var(--danger);border-color:var(--danger-line);background:var(--danger-bg)}
+  .icon-btn.danger:hover{background:#FBE9E7}
+  .icon-btn.unlock-on{color:var(--warn-text);border-color:var(--warn-line);background:var(--warn-bg)}
+  .ico{width:17px;height:17px;flex:none}
+
+  /* ===== 结果区 ===== */
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:15px;margin-top:16px;box-shadow:var(--shadow)}
+  .panel h2{font-size:16px;font-weight:700;margin-bottom:10px}
+
+  @media (max-width:380px){
+    .appbar{padding:14px 15px}
+    .appbar h1{font-size:17.5px}
+    .card-btns{margin-left:0}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="appbar">
+    <div>
+      <h1>工地工序记录表单</h1>
+    </div>
+    <span class="count" id="countBadge">0 条记录</span>
+  </header>
+
+  <main id="listWrap"><!-- 记录卡片动态生成 --></main>
+
+  <button type="button" class="btn btn-add" onclick="addItem()">
+    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg>
+    新增一条工序记录
+  </button>
+
+  <section class="panel">
+    <h2>施工日志文本</h2>
+    <textarea id="resultArea" placeholder="可直接在这里编辑" spellcheck="false" autocapitalize="off" autocorrect="off" oninput="textToCards()"></textarea>
+    <button type="button" class="btn btn-copy" id="btnCopy" onclick="copyText()">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11.5" height="11.5" rx="2.4"/><path d="M5.5 15.2V6.4A2.4 2.4 0 0 1 7.9 4h8.8"/></svg>
+      复制文本
+    </button>
+  </section>
+</div>
+
+<script>
+/* =====================================================================
+   工地工序记录表单 · 应用逻辑（移动优化版 V1）
+   保留原版全部业务规则：
+   - 地点自动分配 / 重复提醒；出渣等工序的设备与人数自动填充
+   - 打钻爆孔输出【钻工X人】；湿喷机输出【操作员】；扒渣机、四不像特殊文本
+   - 卡片与底部文本双向联动；文本可自由编辑
+   新增（本次需求）：
+   - 文本里删除某条中的设备或工序后，卡片对应项转为【其他】
+   - 修改后的文字进入【其他】的自定义输入框，卡片其余内容保留不清空
+   - 删除整行时卡片保留并标记【未在文本中】，再次编辑卡片可重新加入
+   - 编辑文本时不再被自动填充逻辑“抢改”
+   ===================================================================== */
+
+/* ---------- 基础数据（保持不变） ---------- */
+const placeList = [
+  "排水廊道上游",
+  "排水廊道一号支洞",
+  "排水廊道二号支洞",
+  "主变中导洞掌子面",
+  "主厂房下游侧耳",
+  "主厂房上游侧耳",
+  "主厂房掌子面",
+  "中层排水廊道",
+  "通风兼安全洞小桩号",
+  "其他"
+];
+const workList = [
+  {name:"",          autoFillNum:false, enableNum:false},
+  {name:"出渣",      autoFillNum:true,  enableNum:true},
+  {name:"打锚杆孔",  autoFillNum:true,  enableNum:true},
+  {name:"打钻爆孔",  autoFillNum:true,  enableNum:true},
+  {name:"接风水管",  autoFillNum:false, enableNum:true},
+  {name:"编录收方",  autoFillNum:false, enableNum:true},
+  {name:"喷浆",      autoFillNum:false, enableNum:true},
+  {name:"爆破",      autoFillNum:false, enableNum:false},
+  {name:"挂网",      autoFillNum:false, enableNum:true},
+  {name:"焊接锚杆",  autoFillNum:false, enableNum:true},
+  {name:"挖机排险",  autoFillNum:false, enableNum:false},
+  {name:"插锚杆",    autoFillNum:false, enableNum:true},
+  {name:"搭建台车",  autoFillNum:false, enableNum:true},
+  {name:"其他",      autoFillNum:false, enableNum:false}
+];
+const deviceList = [
+  "",
+  "三一渣车",
+  "四不像",
+  "单臂钻",
+  "山推l55d",
+  "山推se390",
+  "山推60",
+  "挖机小松",
+  "扒渣机",
+  "湿喷机",
+  "其他"
+];
+const autoFillPlace = ["排水廊道上游","排水廊道一号支洞","排水廊道二号支洞"];
+
+/* ---------- 通用小工具 ---------- */
+const $  = (sel, root) => (root || document).querySelector(sel);
+const $$ = (sel, root) => Array.prototype.slice.call((root || document).querySelectorAll(sel));
+const setShown = (el, on) => el.classList.toggle('hide', !on);
+const pad2 = n => (n < 10 ? '0' + n : '' + n);
+function cn2num(str){
+  const map = {"零":0,"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,"两":2};
+  let s = (str || '').trim();
+  for (const k in map) s = s.split(k).join(map[k]);
+  return s;
+}
+function workConf(name){
+  return workList.find(w => w.name === name) || {autoFillNum:false, enableNum:false};
+}
+const ICONS = {
+  lock:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="9.5" rx="2.2"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/></svg>',
+  unlock:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="9.5" rx="2.2"/><path d="M8 10.5V7.8a4 4 0 0 1 7.8-1.2"/></svg>',
+  trash:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15"/><path d="M9.5 7V5.4A1.4 1.4 0 0 1 10.9 4h2.2a1.4 1.4 0 0 1 1.4 1.4V7"/><path d="M6.5 7l.8 11.2A2 2 0 0 0 9.3 20h5.4a2 2 0 0 0 2-1.8L17.5 7"/><path d="M10 11.2v5.3M14 11.2v5.3"/></svg>',
+  check:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.6 4.6L19 7.5"/></svg>'
+};
+
+/* ---------- 下拉选项 ---------- */
+function getPlaceOptions(){
+  let html = "";
+  placeList.forEach(p => { html += '<option value="' + p + '">' + p + '</option>'; });
+  return html;
+}
+function getWorkOptions(){
+  let html = '<option value="">选择工序</option>';
+  workList.forEach(w => { if (w.name) html += '<option value="' + w.name + '">' + w.name + '</option>'; });
+  return html;
+}
+function getDeviceOptions(){
+  let html = '<option value="">不选设备</option>';
+  deviceList.forEach(d => { if (d) html += '<option value="' + d + '">' + d + '</option>'; });
+  return html;
+}
+
+/* ---------- 地点分配 ---------- */
+function getUsedPlaces(){
+  const used = [];
+  $$('.place').forEach(sel => {
+    const val = sel.value;
+    if (val && val !== "其他") used.push(val);
+  });
+  return used;
+}
+function getNextAutoPlace(){
+  const used = getUsedPlaces();
+  for (const p of placeList){
+    if (p !== "其他" && used.indexOf(p) === -1) return p;
+  }
+  return "";
+}
+function effPlace(card){
+  const v = $('.place', card).value;
+  if (v === "其他"){
+    const t = $('.other-place-input', card).value.trim();
+    return t || "其他";
+  }
+  return v;
+}
+
+/* ---------- 设备槽位 ---------- */
+function deviceSlot(card, i){
+  return i
+    ? {sel:$('.device-select2',card), count:$('.devCount2',card), other:$('.other-device-input2',card)}
+    : {sel:$('.device-select',card),  count:$('.devCount',card),  other:$('.other-device-input',card)};
+}
+function slotHasDevice(s){
+  return s.sel.value !== "" && !(s.sel.value === "其他" && s.other.value.trim() === "");
+}
+function slotBusy(s){
+  return s.sel.value !== "" || s.other.value.trim() !== "" || s.count.value.trim() !== "";
+}
+function anyDeviceHas(card){
+  return slotHasDevice(deviceSlot(card,0)) || slotHasDevice(deviceSlot(card,1));
+}
+function applyDevSlot(s, tok){
+  if (tok.known && tok.name !== "其他"){
+    s.sel.value = tok.name;
+    s.other.value = "";
+    s.count.value = tok.count || "";
+    setShown(s.other, false);
+  } else {
+    s.sel.value = "其他";
+    s.other.value = tok.name;
+    s.count.value = tok.count || "";
+    setShown(s.other, true);
+  }
+}
+function neutralDevSlot(s){
+  s.sel.value = "其他";
+  s.other.value = "";
+  s.count.value = "";
+  setShown(s.other, false);
+}
+function isFixedDevCombo(card){
+  if ($('.work', card).value !== "出渣") return false;
+  if (autoFillPlace.indexOf($('.place', card).value) === -1) return false;
+  const a = deviceSlot(card, 0), b = deviceSlot(card, 1);
+  return a.sel.value === "扒渣机" && a.count.value.trim() === "" && a.other.value.trim() === ""
+      && b.sel.value === "四不像" && b.count.value.trim() === "" && b.other.value.trim() === "";
+}
+
+/* ---------- 文本解析 ---------- */
+function asDriver(seg){
+  const m = seg.match(/^(司机|操作员)(.*)$/);
+  if (!m) return null;
+  const rest = m[2].split(/\s+/).join('').replace(/人$/, '');
+  if (!rest) return null;
+  return /^[0-9零一二三四五六七八九十两.]+$/.test(rest) ? rest : null;
+}
+function asNum(seg){
+  const t = seg.split(/\s+/).join('');
+  let m = t.match(/^钻工(.+)人$/);
+  if (m && /[0-9零一二三四五六七八九十两]/.test(m[1])) return m[1];
+  m = t.match(/^([0-9零一二三四五六七八九十两]+)人$/);
+  if (m) return m[1];
+  if (/^[0-9]+$/.test(t)) return t;
+  return null;
+}
+function looksLikeDeviceSeg(seg){
+  const t = seg.split(/\s+/).join('');
+  if (/[台辆]/.test(t)) return true;
+  for (const d of deviceList){
+    if (!d || d === "其他") continue;
+    if (t === d) return true;
+    if (t.indexOf(d) === 0){
+      const r = t.slice(d.length);
+      if (/^[0-9零一二三四五六七八九十两]+$/.test(r)) return true;
+    }
+  }
+  return false;
+}
+function splitDevTokens(seg){
+  return seg.split(/[、,，;；]/).map(s => s.trim()).filter(Boolean);
+}
+function parseDeviceToken(rawTok){
+  const t = rawTok.split(/\s+/).join('');
+  const names = deviceList.filter(d => d && d !== "其他").sort((a,b) => b.length - a.length);
+  for (const name of names){
+    if (t.indexOf(name) === 0){
+      const rest = t.slice(name.length);
+      const m = rest.match(/^([0-9零一二三四五六七八九十两]*)(台|辆)?$/);
+      if (m){
+        let count = m[1] || "";
+        if (name === "扒渣机" && /^(1|一)$/.test(count)) count = "";
+        if (name === "四不像" && /^(3|三)$/.test(count)) count = "";
+        return {known:true, name:name, count:count};
+      }
+    }
+  }
+  const m = t.match(/^(.*?)([0-9零一二三四五六七八九十两]+)(台|辆)?$/);
+  if (m && m[1] && /[\u4e00-\u9fff]/.test(m[1])) return {known:false, name:m[1], count:m[2]};
+  const name = t.replace(/[台辆]$/, '');
+  if (!name || /^[0-9零一二三四五六七八九十两]+$/.test(name)) return null;
+  return {known:false, name:name, count:""};
+}
+
+/* ---------- 行文本 → 卡片（核心：不丢失、转为【其他】） ---------- */
+function applyLineToCard(line, card){
+  card.dataset.detached = "";
+
+  const raw = line.split(/[，,]/).map(s => s.trim());
+  const place = (raw[0] || '').trim();
+  const segs = raw.slice(1).filter(Boolean);
+
+  let num = null, driver = null, knownWork = null;
+  const devices = [], unknown = [];
+
+  segs.forEach(seg => {
+    const d = asDriver(seg);
+    if (d !== null){ if (driver === null) driver = d; else unknown.push(seg); return; }
+    const n = asNum(seg);
+    if (n !== null){ if (num === null) num = n; else unknown.push(seg); return; }
+    if (workList.some(w => w.name === seg)){
+      if (knownWork === null) knownWork = seg; else unknown.push(seg);
+      return;
+    }
+    if (looksLikeDeviceSeg(seg)){
+      splitDevTokens(seg).forEach(tok => { const p = parseDeviceToken(tok); if (p) devices.push(p); });
+      return;
+    }
+    unknown.push(seg);
+  });
+
+  /* 地点：能对上就选上；对不上转入【其他】并保留原文字 */
+  if (place){
+    const placeSel = $('.place', card), op = $('.other-place-input', card);
+    if (place === "其他"){
+      placeSel.value = "其他";
+    } else if (placeList.indexOf(place) !== -1){
+      placeSel.value = place;
+      op.value = "";
+      setShown(op, false);
+    } else {
+      placeSel.value = "其他";
+      op.value = place;
+      setShown(op, true);
+    }
+  }
+
+  /* 工序：已知工序直接选；文字被改成其他内容时转入【其他】并保留文字；被删掉时也转为【其他】 */
+  const workSel = $('.work', card), otherW = $('.other-work-input', card);
+  if (knownWork !== null){
+    workSel.value = knownWork;
+    otherW.value = "";
+    setShown(otherW, false);
+  } else if (unknown.length){
+    workSel.value = "其他";
+    otherW.value = unknown.shift();
+    setShown(otherW, true);
+  } else if (workSel.value !== ""){
+    workSel.value = "其他";
+    otherW.value = "";
+    setShown(otherW, true);
+  }
+
+  /* 人数：文字里有就填上；被删掉就清空（不会再被自动回填抢改） */
+  const numEl = $('.num', card);
+  numEl.value = (num !== null) ? num : "";
+
+  /* 司机：同上，保留用户在文本里写的数字 */
+  const drv = $('.driver', card);
+  drv.value = (driver !== null) ? driver : "";
+
+  /* 设备：逐台还原；对不上的设备转入【其他】并保留原文字；被删掉时转为【其他】空槽 */
+  const s1 = deviceSlot(card, 0), s2 = deviceSlot(card, 1);
+  const dev2Row = $('.dev2-row', card);
+  if (devices.length){
+    applyDevSlot(s1, devices[0]);
+  } else if (slotBusy(s1)){
+    neutralDevSlot(s1);
+    setShown(s1.other, true);
+  }
+  let show2 = false;
+  if (devices.length > 1){
+    applyDevSlot(s2, devices[1]);
+    show2 = true;
+  } else if (slotBusy(s2)){
+    neutralDevSlot(s2);
+    show2 = true;
+  }
+  if (show2 && isFixedDevCombo(card)) show2 = false;
+  setShown(dev2Row, show2);
+
+  /* 备注：其余文字全部保留 */
+  $('.remark', card).value = unknown.join('，');
+
+  /* 状态位刷新（人数 / 司机可用性按各自规则，但有值时保持可编辑，避免数据被锁死） */
+  const conf = workConf(workSel.value);
+  numEl.disabled = !conf.enableNum && numEl.value.trim() === "";
+  drv.disabled = !anyDeviceHas(card) && drv.value.trim() === "";
+}
+
+/* ---------- 卡片 → 行文本 ---------- */
+function getWorkText(card){
+  const sel = $('.work', card);
+  const v = sel.value.trim();
+  if (v === "其他") return $('.other-work-input', card).value.trim();
+  return v;
+}
+function getDeviceText(card){
+  const sel = $('.device-select', card);
+  const v = sel.value.trim();
+  if (v === "其他") return $('.other-device-input', card).value.trim();
+  return v;
+}
+function getDeviceText2(card){
+  const sel = $('.device-select2', card);
+  if (!sel) return "";
+  const v = sel.value.trim();
+  if (v === "其他") return $('.other-device-input2', card).value.trim();
+  return v;
+}
+
+/* ---------- 底部文本刷新（卡片 → 文本） ---------- */
+function refreshResult(){
+  renumber();
+  const cards = $$('.item-card', $('#listWrap'));
+  let out = "", active = 0;
+
+  cards.forEach(card => {
+    if (card.dataset.detached === "1") return;
+    active++;
+
+    let place = $('.place', card).value.trim();
+    if (place === "其他"){
+      const cp = $('.other-place-input', card).value.trim();
+      if (cp) place = cp;
+    }
+    const work = getWorkText(card);
+    const numRaw = cn2num($('.num', card).value.trim());
+    let numStr = "";
+    if (numRaw) numStr = (work === "打钻爆孔") ? '钻工' + numRaw + '人' : numRaw + '人';
+
+    const devRaw = getDeviceText(card);
+    const devCountRaw = cn2num($('.devCount', card).value.trim());
+    const dev2Raw = getDeviceText2(card);
+    const dev2CountRaw = cn2num($('.devCount2', card).value.trim());
+
+    const devStrList = [];
+    if (devRaw){
+      if (devCountRaw) devStrList.push(devRaw + devCountRaw + '台');
+      else if (devRaw === "扒渣机") devStrList.push("扒渣机一台");
+      else if (devRaw === "四不像") devStrList.push("四不像3台");
+      else devStrList.push(devRaw);
+    }
+    if (dev2Raw){
+      if (dev2CountRaw) devStrList.push(dev2Raw + dev2CountRaw + '台');
+      else if (dev2Raw === "扒渣机") devStrList.push("扒渣机一台");
+      else if (dev2Raw === "四不像") devStrList.push("四不像3台");
+      else devStrList.push(dev2Raw);
+    }
+    const devStr = devStrList.join('、');
+
+    const driverRaw = cn2num($('.driver', card).value.trim());
+    let driverStr = "";
+    if (driverRaw){
+      const wet = (devRaw === "湿喷机" || dev2Raw === "湿喷机");
+      driverStr = wet ? ('操作员' + driverRaw + '人') : ('司机' + driverRaw + '人');
+    }
+
+    const remark = $('.remark', card).value.trim();
+
+    let line = place + '，';
+    const parts = [];
+    if (work) parts.push(work);
+    if (numStr) parts.push(numStr);
+    if (devStr) parts.push(devStr);
+    if (driverStr) parts.push(driverStr);
+    if (remark) parts.push(remark);
+    line += parts.join('，');
+    out += line + '\n';
+  });
+
+  const ta = $('#resultArea');
+  if (ta.value !== out){
+    let s = null, e = null;
+    if (document.activeElement === ta){
+      try { s = ta.selectionStart; e = ta.selectionEnd; } catch (err) {}
+    }
+    ta.value = out;
+    if (s !== null){
+      const a = Math.min(s, out.length), b = Math.min(e, out.length);
+      try { ta.setSelectionRange(a, b); } catch (err) {}
+    }
+  }
+
+  const badge = $('#countBadge');
+  if (badge) badge.textContent = active + ' 条记录';
+}
+
+/* ---------- 文本 → 卡片（核心联动） ---------- */
+let syncing = false;
+let composing = false;
+
+function textToCards(){
+  if (composing || syncing) return;
+  syncing = true;
+  try {
+    const lines = $('#resultArea').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    const cardWrap = $('#listWrap');
+    const cards = $$('.item-card', cardWrap);
+    const claimed = new Set();
+    const assign = new Map();
+
+    /* 第一轮：按地点精确匹配，保证删中间某行时不会串卡 */
+    lines.forEach((line, i) => {
+      const p = (line.split(/[，,]/)[0] || '').trim();
+      if (!p || p === "其他") return;
+      const hit = cards.find(c => !claimed.has(c) && effPlace(c) === p);
+      if (hit){ claimed.add(hit); assign.set(i, hit); }
+    });
+
+    /* 第二轮：剩下的行按顺序匹配剩下的卡片 */
+    const free = cards.filter(c => !claimed.has(c));
+    let fi = 0;
+    lines.forEach((line, i) => {
+      if (assign.has(i)) return;
+      if (fi < free.length){
+        const c = free[fi++];
+        claimed.add(c);
+        assign.set(i, c);
+      }
+    });
+
+    /* 第三轮：多出来的行生成新卡片；没匹配到的卡片转为【其他】并保留（不删除） */
+    lines.forEach((line, i) => {
+      if (assign.has(i)) applyLineToCard(line, assign.get(i));
+      else addItemByText(line);
+    });
+    cards.forEach(c => {
+      if (!claimed.has(c) && c.dataset.detached !== "1") parkCard(c);
+    });
+
+    refreshResult();
+  } finally {
+    syncing = false;
+  }
+}
+
+/* 卡片“挂起”：整行被删时，工序、设备转为【其他】，保留地点、人数、司机、备注 */
+function parkCard(card){
+  card.dataset.detached = "1";
+  const workSel = $('.work', card), otherW = $('.other-work-input', card);
+  workSel.value = "其他";
+  setShown(otherW, true);
+  const s1 = deviceSlot(card, 0), s2 = deviceSlot(card, 1);
+  [s1, s2].forEach(s => { s.sel.value = "其他"; s.count.value = ""; });
+  setShown(s1.other, true);
+  s2.other.value = "";
+  setShown(s2.other, false);
+  setShown($('.dev2-row', card), false);
+  syncDisabled(card);
+}
+
+function syncDisabled(card){
+  if (card.dataset.locked === "1") return;
+  const num = $('.num', card), drv = $('.driver', card);
+  num.disabled = !workConf($('.work', card).value).enableNum && num.value.trim() === "";
+  drv.disabled = !anyDeviceHas(card) && drv.value.trim() === "";
+}
+
+/* ---------- 卡片构建 ---------- */
+function buildCard(){
+  const el = document.createElement('div');
+  el.className = 'item-card';
+  el.dataset.locked = "0";
+  el.innerHTML = ''
+    + '<div class="card-top">'
+    +   '<div class="card-title"><span class="card-label">记录</span><span class="card-no">00</span></div>'
+    +   '<div class="card-tags"><span class="tag tag-parked">未在文本中</span><span class="tag tag-locked">已锁定</span></div>'
+    +   '<div class="card-btns">'
+    +     '<button type="button" class="icon-btn js-lock" aria-label="锁定这条记录" onclick="toggleLock(this)">' + ICONS.lock + '<span class="btn-text">锁定</span></button>'
+    +     '<button type="button" class="icon-btn danger" aria-label="删除这条记录" onclick="removeCard(this)">' + ICONS.trash + '<span class="btn-text">删除</span></button>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="grid">'
+    +   '<div class="field"><label class="f-label">地点</label><div class="stack">'
+    +     '<select class="place" aria-label="地点" onchange="onPlaceChange(this)">' + getPlaceOptions() + '</select>'
+    +     '<input type="text" class="other-place-input hide" placeholder="输入自定义地点" aria-label="自定义地点" autocomplete="off" oninput="cardEdited(this)">'
+    +   '</div></div>'
+    +   '<div class="field"><label class="f-label">工序</label><div class="stack">'
+    +     '<select class="work" aria-label="工序" onchange="onWorkChange(this)">' + getWorkOptions() + '</select>'
+    +     '<input type="text" class="other-work-input hide" placeholder="输入自定义工序" aria-label="自定义工序" autocomplete="off" oninput="cardEdited(this)">'
+    +   '</div></div>'
+    +   '<div class="field"><label class="f-label">人数</label>'
+    +     '<input type="text" class="num" placeholder="填入数字" aria-label="人数" autocomplete="off" disabled oninput="cardEdited(this)">'
+    +   '</div>'
+    +   '<div class="field"><label class="f-label">司机</label>'
+    +     '<input type="text" class="driver" placeholder="填入数字" aria-label="司机人数" autocomplete="off" disabled oninput="cardEdited(this)">'
+    +   '</div>'
+    +   '<div class="field wide"><label class="f-label">设备</label>'
+    +     '<div class="dev-grid">'
+    +       '<select class="device-select" aria-label="设备" onchange="onDeviceChange(this)">' + getDeviceOptions() + '</select>'
+    +       '<input type="text" class="devCount" placeholder="几台" aria-label="设备台数" autocomplete="off" oninput="cardEdited(this)">'
+    +     '</div>'
+    +     '<input type="text" class="other-device-input hide" placeholder="输入自定义设备" aria-label="自定义设备" autocomplete="off" oninput="cardEdited(this)">'
+    +     '<div class="dev-grid dev2-row hide">'
+    +       '<select class="device-select2" aria-label="第二设备" onchange="onDevice2Change(this)">' + getDeviceOptions() + '</select>'
+    +       '<input type="text" class="devCount2" placeholder="几台" aria-label="第二设备台数" autocomplete="off" oninput="cardEdited(this)">'
+    +     '</div>'
+    +     '<input type="text" class="other-device-input2 hide" placeholder="输入自定义设备" aria-label="自定义第二设备" autocomplete="off" oninput="cardEdited(this)">'
+    +   '</div>'
+    +   '<div class="field wide"><label class="f-label">备注</label>'
+    +     '<input type="text" class="remark" placeholder="停工、特殊情况补充" aria-label="备注" autocomplete="off" oninput="cardEdited(this)">'
+    +   '</div>'
+    + '</div>';
+  return el;
+}
+
+function addItemByText(line){
+  const card = buildCard();
+  $('#listWrap').appendChild(card);
+  applyLineToCard(line, card);
+  return card;
+}
+
+function addItem(){
+  const autoPlace = getNextAutoPlace();
+  const card = buildCard();
+  $('.place', card).value = autoPlace;
+  $('#listWrap').appendChild(card);
+  refreshResult();
+}
+
+function renumber(){
+  $$('.item-card').forEach((c, i) => {
+    const no = $('.card-no', c);
+    if (no) no.textContent = pad2(i + 1);
+  });
+}
+
+/* ---------- 卡片事件 ---------- */
+function unpark(el){
+  const c = el && el.closest ? el.closest('.item-card') : null;
+  if (c) c.dataset.detached = "";
+}
+function cardEdited(el){
+  unpark(el);
+  refreshResult();
+}
+
+function onPlaceChange(sel){
+  unpark(sel);
+  const card = sel.closest('.item-card');
+  const otherInput = $('.other-place-input', card);
+  const newPlace = sel.value;
+
+  if (newPlace !== "其他" && newPlace !== ""){
+    let repeats = 0;
+    $$('.place').forEach(pSel => { if (pSel.value === newPlace) repeats++; });
+    if (repeats > 1){
+      alert('【' + newPlace + '】已经被选择，不能重复选用！');
+      sel.value = "";
+      refreshResult();
+      return;
+    }
+  }
+  setShown(otherInput, newPlace === "其他");
+  const workSel = $('.work', card);
+  if (workSel.value === "出渣"){
+    onWorkChange(workSel);
+    return;
+  }
+  refreshResult();
+}
+
+function onWorkChange(sel){
+  unpark(sel);
+  const card = sel.closest('.item-card');
+  const otherW = $('.other-work-input', card);
+  const workVal = sel.value;
+  setShown(otherW, workVal === "其他");
+
+  const conf = workConf(workVal);
+  const numEl = $('.num', card);
+  const drv = $('.driver', card);
+  const s1 = deviceSlot(card, 0), s2 = deviceSlot(card, 1);
+  const dev2Row = $('.dev2-row', card);
+
+  /* 切换工序时重置设备与司机（与旧版一致） */
+  [s1, s2].forEach(s => {
+    s.sel.value = "";
+    s.count.value = "";
+    s.other.value = "";
+    setShown(s.other, false);
+  });
+  setShown(dev2Row, false);
+  drv.value = "";
+  drv.disabled = true;
+
+  /* 人数启用与自动填充 */
+  numEl.value = "";
+  if (conf.autoFillNum && workVal === "出渣") numEl.value = "4";
+  numEl.disabled = !conf.enableNum;
+
+  /* 出渣的设备自动填充 */
+  if (workVal === "出渣"){
+    const placeVal = $('.place', card).value;
+    if (autoFillPlace.indexOf(placeVal) !== -1){
+      /* 廊道三条支洞：固定【扒渣机一台、四不像3台】，不启用第二设备 */
+      s1.sel.value = "扒渣机";
+      s2.sel.value = "四不像";
+      setShown(dev2Row, false);
+    } else {
+      s2.sel.value = "三一渣车";
+      setShown(dev2Row, true);
+    }
+  }
+  syncDisabled(card);
+  refreshResult();
+}
+
+function onDeviceChange(sel){
+  unpark(sel);
+  const card = sel.closest('.item-card');
+  const s1 = deviceSlot(card, 0), s2 = deviceSlot(card, 1);
+  const drv = $('.driver', card);
+
+  if (sel.value !== "") s1.count.value = "";
+  setShown(s1.other, sel.value === "其他");
+  if (sel.value === "" && !slotHasDevice(s2)) drv.value = "";
+  syncDisabled(card);
+  refreshResult();
+}
+
+function onDevice2Change(sel){
+  unpark(sel);
+  const card = sel.closest('.item-card');
+  const s1 = deviceSlot(card, 0), s2 = deviceSlot(card, 1);
+  const drv = $('.driver', card);
+
+  if (sel.value !== "") s2.count.value = "";
+  setShown(s2.other, sel.value === "其他");
+  if (sel.value === "" && !slotHasDevice(s1)) drv.value = "";
+  syncDisabled(card);
+  refreshResult();
+}
+
+function toggleLock(btn){
+  const card = btn.closest('.item-card');
+  const locked = card.dataset.locked === "1";
+  const fields = $$('input, select', card);
+  if (!locked){
+    card.dataset.locked = "1";
+    btn.classList.add('unlock-on');
+    btn.innerHTML = ICONS.unlock + '<span class="btn-text">解锁</span>';
+    fields.forEach(el => { el.disabled = true; });
+  } else {
+    card.dataset.locked = "0";
+    btn.classList.remove('unlock-on');
+    btn.innerHTML = ICONS.lock + '<span class="btn-text">锁定</span>';
+    fields.forEach(el => { el.disabled = false; });
+    syncDisabled(card);
+  }
+  refreshResult();
+}
+
+function removeCard(btn){
+  btn.closest('.item-card').remove();
+  refreshResult();
+}
+
+/* ---------- 复制 ---------- */
+function copyText(){
+  const ta = $('#resultArea');
+  const btn = $('#btnCopy');
+  const txt = ta.value;
+  if (!txt.trim()){ alert('文本还是空的，先填一条记录吧'); return; }
+
+  const done = () => {
+    const old = btn.innerHTML;
+    btn.classList.add('ok');
+    btn.innerHTML = ICONS.check + '<span class="btn-text">已复制</span>';
+    setTimeout(() => {
+      btn.classList.remove('ok');
+      btn.innerHTML = old;
+    }, 1500);
+  };
+
+  const fallbackCopy = () => {
+    let focused = false;
+    try {
+      focused = (document.activeElement === ta);
+      if (!focused) ta.focus();
+      ta.setSelectionRange(0, txt.length);
+      const ok = document.execCommand && document.execCommand('copy');
+      if (!focused) ta.blur();
+      if (ok){ done(); return true; }
+    } catch (err) {
+      try { if (!focused) ta.blur(); } catch (err2) {}
+    }
+    return false;
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done).catch(() => { if (!fallbackCopy()) alert('复制失败，请长按文本手动复制'); });
+  } else {
+    if (!fallbackCopy()) alert('复制失败，请长按文本手动复制');
+  }
+}
+
+/* ---------- 初始化 ---------- */
+(function init(){
+  const ta = $('#resultArea');
+  ta.addEventListener('compositionstart', () => { composing = true; });
+  ta.addEventListener('compositionend', () => { composing = false; textToCards(); });
+  addItem();
+})();
+</script>
+</body>
+</html>
